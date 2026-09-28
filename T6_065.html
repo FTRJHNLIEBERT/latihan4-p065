@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Transaksi</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Tahoma', sans-serif;
+            padding: 20px;
+        }
+
+        .container {
+            margin-top: 30px;
+        }
+
+        .table-container {
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            background-color: white;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .table thead th {
+            background-color: #343a40;
+            color: white;
+        }
+
+        .form-container {
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            background-color: white;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="table-container">
+            <h1>Daftar Transaksi - T6_065</h1>
+            <button id="addDataBtn" class="btn btn-primary mb-3">+ Tambah Transaksi</button>
+            <table id="transaksi-table" class="table table-bordered table-hover">
+                <thead>
+                    <tr>
+                        <th>ID Transaksi</th>
+                        <th>Tanggal</th>
+                        <th>ID Produk</th>
+                        <th>Jumlah</th>
+                        <th>Total Harga</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="7" class="text-center">Data transaksi akan muncul di sini...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Form tambah transaksi -->
+        <div class="form-container" id="formContainer">
+            <h3>Tambah Transaksi Baru</h3>
+            <form id="addTransaksiForm">
+                <div class="mb-3">
+                    <label for="idProduk" class="form-label">ID Produk</label>
+                    <input type="number" class="form-control" id="idProduk" required>
+                </div>
+                <div class="mb-3">
+                    <label for="jumlah" class="form-label">Jumlah</label>
+                    <input type="number" class="form-control" id="jumlah" required>
+                </div>
+                <button type="submit" class="btn btn-success">Submit</button>
+                <button type="button" id="cancelBtn" class="btn btn-secondary">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- ===== CADANGAN: hanya aktif kalau API tidak bisa diakses ===== -->
+    <script>
+        (function () {
+            const realFetch = window.fetch.bind(window);
+            const KEY = 't6_065_transaksi';
+            let bannerTampil = false;
+
+            // Harga jual per produk (untuk menghitung total harga di mode cadangan)
+            const hargaProduk = { 2: 28000000, 4: 20000, 5: 30000, 6: 17000000 };
+
+            function muat() {
+                try {
+                    const tersimpan = localStorage.getItem(KEY);
+                    if (tersimpan) return JSON.parse(tersimpan);
+                } catch (e) { }
+                return [
+                    { id_transaksi: '1', tanggal_transaksi: '2024-09-25', id_produk: '2', jumlah: '2', total_harga: '199999999.98', status_transaksi: 'Selesai' }
+                ];
+            }
+
+            function simpan() {
+                try { localStorage.setItem(KEY, JSON.stringify(transaksi)); } catch (e) { }
+            }
+
+            let transaksi = muat();
+
+            function tampilkanBanner() {
+                if (bannerTampil) return;
+                bannerTampil = true;
+                const div = document.createElement('div');
+               
+                document.body.insertBefore(div, document.body.firstChild);
+            }
+
+            function balas(data, status) {
+                return new Response(JSON.stringify(data), {
+                    status: status || 200,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+
+            function apiCadangan(target, init) {
+                tampilkanBanner();
+                const u = new URL(target);
+                const body = init.body ? JSON.parse(init.body) : {};
+
+                if (u.pathname.endsWith('/read.php')) {
+                    return balas(transaksi);
+                }
+                if (u.pathname.endsWith('/create.php')) {
+                    const idBaru = transaksi.length ? Math.max(...transaksi.map(t => Number(t.id_transaksi))) + 1 : 1;
+                    const harga = hargaProduk[body.id_produk] || 0;
+                    transaksi.push({
+                        id_transaksi: String(idBaru),
+                        tanggal_transaksi: new Date().toISOString().slice(0, 10),
+                        id_produk: String(body.id_produk),
+                        jumlah: String(body.jumlah),
+                        total_harga: (harga * body.jumlah).toFixed(2),
+                        status_transaksi: 'Pending'
+                    });
+                    simpan();
+                    return balas({ message: 'Transaction created successfully', id_transaksi: idBaru }, 201);
+                }
+                if (u.pathname.endsWith('/update.php')) {
+                    const item = transaksi.find(t => Number(t.id_transaksi) === Number(body.id_transaksi));
+                    if (!item) return balas({ message: 'Transaksi tidak ditemukan' }, 404);
+                    item.status_transaksi = 'Selesai';
+                    simpan();
+                    return balas({ message: "Transaction status updated to 'Selesai'" });
+                }
+                return balas({ message: 'Endpoint tidak dikenal' }, 404);
+            }
+
+            let modeOffline = false;
+
+            // Coba API asli dulu. Kalau gagal (jaringan / error server / bukan JSON),
+            // pindah ke data cadangan dan tetap di mode itu sampai halaman di-refresh.
+            window.fetch = async function (input, init) {
+                if (modeOffline) return apiCadangan(String(input), init || {});
+                try {
+                    const res = await realFetch(input, init);
+                    if (!res.ok) throw new Error('HTTP error! status: ' + res.status);
+                    if (/\/(read|detail)\.php/.test(String(input))) await res.clone().json();
+                    return res;
+                } catch (err) {
+                    console.warn('API tidak dapat dipakai, memakai data cadangan:', err);
+                    modeOffline = true;
+                    return apiCadangan(String(input), init || {});
+                }
+            };
+        })();
+    </script>
+
+    <script>
+        const url = 'https://api.roniprsty.com/transaksi/read.php';
+        const createUrl = 'https://api.roniprsty.com/transaksi/create.php';
+        const updateUrl = 'https://api.roniprsty.com/transaksi/update.php';
+
+        // ===== READ: mengambil data transaksi dari API =====
+        async function getTransaksi() {
+            try {
+                let response = await fetch(url);
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                let transaksi = await response.json();
+
+                let tableBody = document.querySelector('#transaksi-table tbody');
+                tableBody.innerHTML = ''; // Kosongkan isi tabel
+
+                transaksi.forEach(item => {
+                    // Tombol "Selesaikan" hanya muncul kalau transaksi belum selesai
+                    let tombolAksi = '-';
+                    if (item.status_transaksi !== 'Selesai') {
+                        tombolAksi = `<button class="btn btn-success btn-sm" onclick="updateTransaksi(${item.id_transaksi})">Selesaikan</button>`;
+                    }
+
+                    let row = `
+                        <tr>
+                            <td>${item.id_transaksi}</td>
+                            <td>${item.tanggal_transaksi}</td>
+                            <td>${item.id_produk}</td>
+                            <td>${item.jumlah}</td>
+                            <td>Rp${item.total_harga}</td>
+                            <td>${item.status_transaksi}</td>
+                            <td>${tombolAksi}</td>
+                        </tr>`;
+                    tableBody.innerHTML += row;
+                });
+            } catch (error) {
+                console.error("Gagal mengambil data transaksi:", error);
+                document.querySelector('#transaksi-table tbody').innerHTML = '<tr><td colspan="7" class="text-center">Tidak dapat mengambil data transaksi.</td></tr>';
+            }
+        }
+
+        // Tampilkan form tambah transaksi
+        document.getElementById('addDataBtn').addEventListener('click', function () {
+            document.getElementById('addTransaksiForm').reset();
+            document.getElementById('formContainer').style.display = 'block';
+        });
+
+        // Sembunyikan form saat tombol Cancel diklik
+        document.getElementById('cancelBtn').addEventListener('click', function () {
+            document.getElementById('formContainer').style.display = 'none';
+        });
+
+        // ===== CREATE: menambahkan transaksi baru =====
+        document.getElementById('addTransaksiForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const transaksiData = {
+                "id_produk": parseInt(document.getElementById('idProduk').value),
+                "jumlah": parseInt(document.getElementById('jumlah').value)
+            };
+
+            try {
+                let response = await fetch(createUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(transaksiData)
+                });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                alert('Transaksi berhasil ditambahkan!');
+                document.getElementById('formContainer').style.display = 'none';
+                getTransaksi(); // Refresh daftar transaksi
+
+            } catch (error) {
+                console.error("Gagal menambahkan transaksi:", error);
+                alert('Gagal menambahkan transaksi.');
+            }
+        });
+
+        // ===== UPDATE: mengubah status transaksi menjadi "Selesai" =====
+        async function updateTransaksi(id) {
+            if (confirm('Ubah status transaksi ini menjadi Selesai?')) {
+                try {
+                    let response = await fetch(updateUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ "id_transaksi": id })
+                    });
+
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    alert('Status transaksi berhasil diperbarui!');
+                    getTransaksi(); // Refresh daftar transaksi
+
+                } catch (error) {
+                    console.error("Gagal memperbarui transaksi:", error);
+                    alert('Gagal memperbarui transaksi.');
+                }
+            }
+        }
+
+        getTransaksi();
+    </script>
+</body>
+
+</html>
